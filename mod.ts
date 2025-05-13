@@ -1,13 +1,10 @@
-import type { CompilerInformation, CompilerOptions } from "../tinyrpc/types.ts";
+import type { CompilerInformation, CompilerOptions } from "@tinyrpc/server/types";
+import type { SmallCompilerOptions } from "./interfaces/mod.ts";
 import { compilePackage } from "./compilers/mod.ts";
 
-export interface CompilerPlainOptions {
-  imports: Record<string, string>;
-}
-
 export function SmallCompiler(
-  config: CompilerPlainOptions = { imports: {} },
-): CompilerInformation<CompilerPlainOptions> {
+  config: SmallCompilerOptions = { imports: {} },
+): CompilerInformation<SmallCompilerOptions> {
   return {
     name: "Small Compiler",
     // deno-lint-ignore require-await

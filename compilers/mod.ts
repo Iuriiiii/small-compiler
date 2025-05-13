@@ -1,4 +1,3 @@
-import type { CompilerPlainOptions } from "../mod.ts";
 import type {
   CalculatedDatatype,
   CompilerOptions,
@@ -52,10 +51,11 @@ import {
   UnionDatatype,
   Void,
 } from "@tinyrpc/server/datatypes";
+import type { SmallCompilerOptions } from "../interfaces/mod.ts";
 
 interface ExtendedMemberMetadata
   extends
-    Omit<MemberMetadata, "optional" | "nullable" | "private" | "readonly"> {
+  Omit<MemberMetadata, "optional" | "nullable" | "private" | "readonly"> {
   stringDatatype: string;
   optional: string;
   nullable: string;
@@ -88,7 +88,7 @@ interface ExtendedModuleMetadata extends ModuleMetadata {
 interface CompilationContext {
   imports: CalculatedDatatype[];
   options: CompilerOptions;
-  compilerOptions: CompilerPlainOptions;
+  compilerOptions: SmallCompilerOptions;
 }
 
 const RENDER_UTILS = {
@@ -380,7 +380,7 @@ export function methodCompiler(
       calculatedDatatype.type === DatatypeType.Structure ||
       (calculatedDatatype.type === DatatypeType.Module &&
         (calculatedDatatype.reference as Constructor).prototype instanceof
-          SerializableClass)
+        SerializableClass)
     ) {
       const constructor = calculatedDatatype.reference as Constructor;
       const constructorName = constructor.name;
@@ -469,7 +469,7 @@ export function modCompiler(
 function enumsCompiler(
   enums: EnumMetadata[],
   options: CompilerOptions,
-  compilerOptions: CompilerPlainOptions,
+  compilerOptions: SmallCompilerOptions,
   enumsPath: string,
 ) {
   const enumsMod: string[] = [];
@@ -497,7 +497,7 @@ function enumsCompiler(
 function structuresCompiler(
   structures: StructureMetadata[],
   options: CompilerOptions,
-  compilerOptions: CompilerPlainOptions,
+  compilerOptions: SmallCompilerOptions,
   structuresPath: string,
 ) {
   const structuresMod: string[] = [];
@@ -536,7 +536,7 @@ function structuresCompiler(
 function modulesCompiler(
   modules: ModuleMetadata[],
   options: CompilerOptions,
-  compilerOptions: CompilerPlainOptions,
+  compilerOptions: SmallCompilerOptions,
   modulesPath: string,
 ) {
   const modulesMod: string[] = [];
@@ -563,7 +563,7 @@ function modulesCompiler(
 
 function denoJsonCompiler(
   options: CompilerOptions,
-  compilerOptions: CompilerPlainOptions,
+  compilerOptions: SmallCompilerOptions,
   mainPath: string,
 ) {
   const imports = compilerOptions?.imports ?? {};
@@ -584,7 +584,7 @@ function denoJsonCompiler(
 
 function exportAll(
   options: CompilerOptions,
-  _compilerOptions: CompilerPlainOptions,
+  _compilerOptions: SmallCompilerOptions,
   mainPath: string,
 ) {
   const allFiles = ["structures/mod.ts", "modules/mod.ts", "enums/mod.ts"];
@@ -592,9 +592,8 @@ function exportAll(
 import { configSdk } from "@tinyrpc/sdk-core";
 
 configSdk({
-  host: "${options.server?.hostname ?? "[::1]"}:${
-    options.server?.port ?? 8080
-  }",
+  host: "${options.server?.hostname ?? "[::1]"}:${options.server?.port ?? 8080
+    }",
   https: ${options.server?.port === 443},
 });
 `.trim();
@@ -607,7 +606,7 @@ configSdk({
 
 export function compilePackage(
   options: CompilerOptions,
-  config: CompilerPlainOptions,
+  config: SmallCompilerOptions,
 ) {
   const { structures, modules, enums } = options.metadata;
   const { path = `${Deno.cwd()}/plain-sdk` } = options.sdkOptions ?? {};
