@@ -1,4 +1,7 @@
-import type { CompilerInformation, CompilerOptions } from "@tinyrpc/server/types";
+import type {
+  CompilerInformation,
+  CompilerOptions,
+} from "@tinyrpc/server/types";
 import type { SmallCompilerOptions } from "./interfaces/mod.ts";
 import { compilePackage } from "./compilers/mod.ts";
 

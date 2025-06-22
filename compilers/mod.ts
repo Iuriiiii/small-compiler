@@ -28,7 +28,7 @@ import {
   quoteValueIfNeeded,
   randomString,
   toFilename,
-  writeFile
+  writeFile,
 } from "../utils/mod.ts";
 import ejs from "ejs";
 import {
@@ -60,7 +60,7 @@ import { getConstructorName } from "../../tinyrpc/src/utils/get-constructor-name
 
 interface ExtendedMemberMetadata
   extends
-  Omit<MemberMetadata, "optional" | "nullable" | "private" | "readonly"> {
+    Omit<MemberMetadata, "optional" | "nullable" | "private" | "readonly"> {
   stringDatatype: string;
   optional: string;
   nullable: string;
@@ -311,7 +311,7 @@ function compileClass(
   _constructor: Constructor,
   _members: MemberMetadata[],
   _methods: MethodMetadata[],
-  _context: CompilationContext
+  _context: CompilationContext,
 ) {
   const isSerializable = _constructor.prototype instanceof
     SerializableClass;
@@ -331,7 +331,11 @@ function compileClass(
   const constructorParams = _members
     .filter((member) => !isUndefined(member.constructorParam))
     .map((member) => constructorParamCompiler(member, _context));
-  const importStructures = importCompiler("../structures/", _context, DatatypeType.Structure)
+  const importStructures = importCompiler(
+    "../structures/",
+    _context,
+    DatatypeType.Structure,
+  )
     .join("\n");
   const importsModules = importCompiler("./", _context, DatatypeType.Module)
     .join("\n");
@@ -342,15 +346,20 @@ function compileClass(
     .join("\n\n");
   const moduleArguments = _members
     .filter((member) => !isUndefined(member.constructorParam))
-    .sort((memberA, memberB) => memberA.constructorParam! - memberB.constructorParam!)
+    .sort((memberA, memberB) =>
+      memberA.constructorParam! - memberB.constructorParam!
+    )
     .map((member) => {
       if ([String, Number].includes(member.dataType)) {
         return `this.${member.name}`;
       }
 
       const constructorName = member.dataType.name;
-      const structureOrModule = (getModule(constructorName) || getStructure(constructorName))!;
-      const identifierMember = structureOrModule.members.find((m) => m.identifier)!;
+      const structureOrModule =
+        (getModule(constructorName) || getStructure(constructorName))!;
+      const identifierMember = structureOrModule.members.find((m) =>
+        m.identifier
+      )!;
 
       return `this.${member.name}.${identifierMember.name}`;
     })
@@ -362,7 +371,9 @@ function compileClass(
     .join(", ");
   const moduleFromArguments = _members
     .filter((member) => !isUndefined(member.constructorParam))
-    .sort((memberA, memberB) => memberA.constructorParam! - memberB.constructorParam!)
+    .sort((memberA, memberB) =>
+      memberA.constructorParam! - memberB.constructorParam!
+    )
     .map((member) => `obj.${member.name}`)
     .join(", ");
   const membersAssignation = _members
@@ -383,7 +394,7 @@ function compileClass(
     members,
     constructorParams,
     membersAssignation,
-    moduleFromArguments
+    moduleFromArguments,
   }) as string;
 }
 
@@ -396,7 +407,7 @@ export function structureCompiler(
     structure.constructor,
     structure.members,
     [],
-    context
+    context,
   );
 }
 
@@ -479,7 +490,7 @@ export function methodCompiler(
       calculatedDatatype.type === DatatypeType.Structure ||
       (calculatedDatatype.type === DatatypeType.Module &&
         (calculatedDatatype.reference as Constructor).prototype instanceof
-        SerializableClass)
+          SerializableClass)
     ) {
       const constructor = calculatedDatatype.reference as Constructor;
       const constructorName = constructor.name;
@@ -528,7 +539,7 @@ export function moduleCompiler(
     module.constructor,
     module.members,
     module.methods,
-    context
+    context,
   );
 }
 
@@ -666,8 +677,9 @@ function exportAll(
 import { configSdk } from "@tinyrpc/sdk-core";
 
 configSdk({
-  host: "${options.server?.hostname ?? "[::1]"}:${options.server?.port ?? 8080
-    }",
+  host: "${options.server?.hostname ?? "[::1]"}:${
+    options.server?.port ?? 8080
+  }",
   https: ${options.server?.port === 443},
   deserializers: [],
   serializers: []
@@ -679,8 +691,6 @@ configSdk({
     modCompiler(allFiles, options) + finalConfiguration,
   );
 }
-
-
 
 export function compilePackage(
   options: CompilerOptions,
