@@ -41,8 +41,7 @@ import {
   MOD_TEMPLATE,
   MODULE_TEMPLATE,
   PARAM_TEMPLATE,
-  STRUCTURE_MEMBER_TEMPLATE,
-  STRUCTURE_TEMPLATE,
+  STRUCTURE_MEMBER_TEMPLATE
 } from "../statics/mod.ts";
 import { isConstructor, isUndefined } from "@online/is";
 import currentDenoJson from "../deno.json" with { type: "json" };
@@ -56,7 +55,6 @@ import {
   Void,
 } from "@tinyrpc/server/datatypes";
 import type { SmallCompilerOptions } from "../interfaces/mod.ts";
-import { getConstructorName } from "../../tinyrpc/src/utils/get-constructor-name.util.ts";
 
 interface ExtendedMemberMetadata
   extends
