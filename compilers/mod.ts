@@ -15,6 +15,8 @@ import {
   calculateDatatype,
   DatatypeType,
   getExposedEnumName,
+  getModule,
+  getStructure,
 } from "@tinyrpc/server/utils";
 import {
   createPackageFolder,
@@ -22,6 +24,8 @@ import {
   getEnumKeys,
   nativeDatatypeToString,
   pascalToKebab,
+  quoteKeyIfNeeded,
+  quoteValueIfNeeded,
   randomString,
   toFilename,
   writeFile,
@@ -40,7 +44,7 @@ import {
   STRUCTURE_MEMBER_TEMPLATE,
   STRUCTURE_TEMPLATE,
 } from "../statics/mod.ts";
-import { isConstructor, isNumber, isUndefined } from "@online/is";
+import { isConstructor, isUndefined } from "@online/is";
 import currentDenoJson from "../deno.json" with { type: "json" };
 import {
   CustomDatatype,
@@ -52,10 +56,11 @@ import {
   Void,
 } from "@tinyrpc/server/datatypes";
 import type { SmallCompilerOptions } from "../interfaces/mod.ts";
+import { getConstructorName } from "../../tinyrpc/src/utils/get-constructor-name.util.ts";
 
 interface ExtendedMemberMetadata
   extends
-  Omit<MemberMetadata, "optional" | "nullable" | "private" | "readonly"> {
+    Omit<MemberMetadata, "optional" | "nullable" | "private" | "readonly"> {
   stringDatatype: string;
   optional: string;
   nullable: string;
@@ -210,6 +215,46 @@ export function memberCompiler(
     readonly: member.readonly ? "readonly " : "",
   };
 
+  if (!isUndefined(member.constructorParam)) {
+    if (!member.optional) {
+      // extendedDatatype.optional = "";
+    }
+
+    if (!member.private) {
+      extendedDatatype.private = "public ";
+    }
+  }
+
+  return ejs.render(STRUCTURE_MEMBER_TEMPLATE, {
+    member: extendedDatatype,
+    utils: RENDER_UTILS,
+  }) as string;
+}
+
+export function constructorParamCompiler(
+  member: MemberMetadata,
+  context: CompilationContext,
+) {
+  const stringDatatype = datatypeCompiler(context, member.dataType);
+  const extendedDatatype: ExtendedMemberMetadata = {
+    ...member,
+    stringDatatype,
+    optional: member.optional ? "?" : "!",
+    nullable: member.nullable ? " | null" : "",
+    private: member.private ? "private " : "",
+    readonly: member.readonly ? "readonly " : "",
+  };
+
+  if (!isUndefined(member.constructorParam)) {
+    if (!member.optional) {
+      extendedDatatype.optional = "";
+    }
+
+    if (!member.private) {
+      extendedDatatype.private = "public ";
+    }
+  }
+
   return ejs.render(STRUCTURE_MEMBER_TEMPLATE, {
     member: extendedDatatype,
     utils: RENDER_UTILS,
@@ -261,50 +306,115 @@ function importCompiler(
   return stringImports;
 }
 
+function compileClass(
+  _name: string,
+  _constructor: Constructor,
+  _members: MemberMetadata[],
+  _methods: MethodMetadata[],
+  _context: CompilationContext,
+) {
+  const isSerializable = _constructor.prototype instanceof
+    SerializableClass;
+  const extendedModule: ExtendedModuleMetadata = {
+    isSerializable,
+    serializable: isSerializable ? "@Serializable()" : "",
+    name: _name,
+    constructor: _constructor,
+    members: _members,
+    methods: _methods,
+  };
+  const methods = _methods
+    .map((method) => methodCompiler(extendedModule, method, _context));
+  const members = _members
+    .filter((member) => isUndefined(member.constructorParam))
+    .map((member) => memberCompiler(member, _context));
+  const constructorParams = _members
+    .filter((member) => !isUndefined(member.constructorParam))
+    .map((member) => constructorParamCompiler(member, _context));
+  const importStructures = importCompiler(
+    "../structures/",
+    _context,
+    DatatypeType.Structure,
+  )
+    .join("\n");
+  const importsModules = importCompiler("./", _context, DatatypeType.Module)
+    .join("\n");
+  const importsEnums = importCompiler("../enums/", _context, DatatypeType.Enum)
+    .join("\n");
+  const paramInterfaces = _methods
+    .map((method) => interfaceParamsCompiler(method, _context))
+    .join("\n\n");
+  const moduleArguments = _members
+    .filter((member) => !isUndefined(member.constructorParam))
+    .sort((memberA, memberB) =>
+      memberA.constructorParam! - memberB.constructorParam!
+    )
+    .map((member) => {
+      if ([String, Number].includes(member.dataType)) {
+        return `this.${member.name}`;
+      }
+
+      const constructorName = member.dataType.name;
+      const structureOrModule =
+        (getModule(constructorName) || getStructure(constructorName))!;
+      const identifierMember = structureOrModule.members.find((m) =>
+        m.identifier
+      )!;
+
+      return `this.${member.name}.${identifierMember.name}`;
+    })
+    .join(", ");
+  const moduleMembers = _members
+    .filter((member) => isUndefined(member.constructorParam))
+    .map((member) => `${member.name}: this.${member.name}`)
+    .reverse()
+    .join(", ");
+  const moduleFromArguments = _members
+    .filter((member) => !isUndefined(member.constructorParam))
+    .sort((memberA, memberB) =>
+      memberA.constructorParam! - memberB.constructorParam!
+    )
+    .map((member) => `obj.${member.name}`)
+    .join(", ");
+  const membersAssignation = _members
+    .filter((member) => isUndefined(member.constructorParam))
+    .map((member) => `instance.${member.name} = obj.${member.name}`)
+    .join("\n");
+
+  return ejs.render(MODULE_TEMPLATE, {
+    module: extendedModule,
+    methods,
+    importStructures,
+    importsModules,
+    importsEnums,
+    paramInterfaces,
+    utils: RENDER_UTILS,
+    moduleArguments,
+    moduleMembers,
+    members,
+    constructorParams,
+    membersAssignation,
+    moduleFromArguments,
+  }) as string;
+}
+
 export function structureCompiler(
   structure: StructureMetadata,
   context: CompilationContext,
 ) {
-  const members = structure.members.map((member) =>
-    memberCompiler(member, context)
+  return compileClass(
+    structure.name,
+    structure.constructor,
+    structure.members,
+    [],
+    context,
   );
-  const importStructures = importCompiler("./", context, DatatypeType.Structure)
-    .join("\n");
-  const importsModules = importCompiler(
-    "../modules/",
-    context,
-    DatatypeType.Module,
-  ).join("\n");
-  const importsEnums = importCompiler("../enums/", context, DatatypeType.Enum)
-    .join("\n");
-
-  return ejs.render(STRUCTURE_TEMPLATE, {
-    structure,
-    members,
-    context,
-    importStructures,
-    importsModules,
-    importsEnums,
-    utils: RENDER_UTILS,
-  }) as string;
 }
 
 export function enumCompiler(
   _enum: EnumMetadata,
   context: CompilationContext,
 ) {
-  function quoteKeyIfNeeded(value: string) {
-    return value.match(/\s+/) ? `"${value}"` : value;
-  }
-
-  function quoteValueIfNeeded(value: string | number) {
-    if (isNumber(value)) {
-      return value;
-    }
-
-    return `"${value.replaceAll('"', '\\"')}"`;
-  }
-
   const enumerator = _enum.value as Record<string, string | number>;
   const keys = getEnumKeys(enumerator);
   const values = keys.map((key) =>
@@ -380,7 +490,7 @@ export function methodCompiler(
       calculatedDatatype.type === DatatypeType.Structure ||
       (calculatedDatatype.type === DatatypeType.Module &&
         (calculatedDatatype.reference as Constructor).prototype instanceof
-        SerializableClass)
+          SerializableClass)
     ) {
       const constructor = calculatedDatatype.reference as Constructor;
       const constructorName = constructor.name;
@@ -424,39 +534,13 @@ export function moduleCompiler(
   module: ModuleMetadata,
   context: CompilationContext,
 ) {
-  const isSerializable = module.constructor.prototype instanceof
-    SerializableClass;
-  const extendedModule: ExtendedModuleMetadata = {
-    ...module,
-    isSerializable,
-    serializable: isSerializable ? "@Serializable()" : "",
-  };
-  const methods = module.methods.map((method) =>
-    methodCompiler(extendedModule, method, context)
-  );
-
-  const importStructures = importCompiler(
-    "../structures/",
+  return compileClass(
+    module.name,
+    module.constructor,
+    module.members,
+    module.methods,
     context,
-    DatatypeType.Structure,
-  ).join("\n");
-  const importsModules = importCompiler("./", context, DatatypeType.Module)
-    .join("\n");
-  const importsEnums = importCompiler("../enums/", context, DatatypeType.Enum)
-    .join("\n");
-  const paramInterfaces = module.methods.map((method) =>
-    interfaceParamsCompiler(method, context)
-  ).join("\n\n");
-
-  return ejs.render(MODULE_TEMPLATE, {
-    module: extendedModule,
-    methods,
-    importStructures,
-    importsModules,
-    importsEnums,
-    paramInterfaces,
-    utils: RENDER_UTILS,
-  }) as string;
+  );
 }
 
 export function modCompiler(
@@ -470,14 +554,15 @@ function enumsCompiler(
   enums: EnumMetadata[],
   options: CompilerOptions,
   compilerOptions: SmallCompilerOptions,
-  enumsPath: string,
 ) {
+  const { path = `${Deno.cwd()}/small-sdk` } = options.sdkOptions ?? {};
+  const enumsPath = `${path}/enums`;
   const enumsMod: string[] = [];
 
   for (const _enum of enums) {
     const { name: enumName } = _enum;
     const enumFileName = toFilename(enumName, "enum");
-
+    const enumFullPath = `${enumsPath}/${enumFileName}`;
     const compilationContext: CompilationContext = {
       imports: [],
       compilerOptions,
@@ -485,7 +570,7 @@ function enumsCompiler(
     };
 
     writeFile(
-      `${enumsPath}/${enumFileName}`,
+      enumFullPath,
       enumCompiler(_enum, compilationContext),
     );
     enumsMod.push(enumFileName);
@@ -592,9 +677,12 @@ function exportAll(
 import { configSdk } from "@tinyrpc/sdk-core";
 
 configSdk({
-  host: "${options.server?.hostname ?? "[::1]"}:${options.server?.port ?? 8080
-    }",
+  host: "${options.server?.hostname ?? "[::1]"}:${
+    options.server?.port ?? 8080
+  }",
   https: ${options.server?.port === 443},
+  deserializers: [],
+  serializers: []
 });
 `.trim();
 
@@ -609,7 +697,7 @@ export function compilePackage(
   config: SmallCompilerOptions,
 ) {
   const { structures, modules, enums } = options.metadata;
-  const { path = `${Deno.cwd()}/plain-sdk` } = options.sdkOptions ?? {};
+  const { path = `${Deno.cwd()}/small-sdk` } = options.sdkOptions ?? {};
   const modulesPath = `${path}/modules`;
   const structuresPath = `${path}/structures`;
   const enumsPath = `${path}/enums`;
@@ -619,7 +707,7 @@ export function compilePackage(
   createPackageFolder(modulesPath);
   createPackageFolder(enumsPath);
 
-  enumsCompiler(enums, options, config, enumsPath);
+  enumsCompiler(enums, options, config);
   structuresCompiler(structures, options, config, structuresPath);
   modulesCompiler(modules, options, config, modulesPath);
   denoJsonCompiler(options, config, path);
