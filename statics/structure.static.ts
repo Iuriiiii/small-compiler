@@ -3,12 +3,11 @@ export const STRUCTURE_TEMPLATE = `
 <%- importsModules -%>
 <%- importsEnums -%>
 import {
-  type RequireAtLeastOne,
+  type AtLeastOneOf,
   type SerializedClass,
-  Serializable
+  registerClass,
 } from "@tinyrpc/sdk-core";
 
-@Serializable()
 export class <%- structure.name %> {
   <% for (const member of members) { %>
   <%- member -%>
@@ -16,7 +15,7 @@ export class <%- structure.name %> {
 
   constructor(<%- constructorParams %>) { }
 
-  serialize(): RequireAtLeastOne<SerializedClass<typeof <%- structure.name -%>>> {
+  serialize(): AtLeastOneOf<SerializedClass<typeof <%- structure.name -%>>> {
     return {
       arguments: [<%- structureArguments -%>],
       members: {<%- structureMembers -%>}
@@ -29,4 +28,6 @@ export class <%- structure.name %> {
     return Object.assign(, members);
   }
 }
+
+registerClass(<%- structure.name %>);
 `.trim();

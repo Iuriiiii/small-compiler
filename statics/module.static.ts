@@ -6,8 +6,9 @@ export const MODULE_TEMPLATE = `
 import {
   type Unwrappable,
   type ClassOrInterface,
-  type RequireAtLeastOne,
+  type AtLeastOneOf,
   type SerializedClass,
+  registerClass,
   HttpError,
   MethodResponse,
   RequestBody,
@@ -16,14 +17,10 @@ import {
   makeItUnwrappable,
   normalizeObject,
   SerializableClass,
-  Serializable
 } from "@tinyrpc/sdk-core";
 
 <%- paramInterfaces %>
 
-<% if (module.isSerializable) { %>
-@Serializable()
-<% } %>
 export class <%- module.name -%> <% if (module.isSerializable) { %> extends SerializableClass <% } %> {
   <%- members.join(";") %>
 
@@ -35,7 +32,7 @@ export class <%- module.name -%> <% if (module.isSerializable) { %> extends Seri
   <%- method -%>
   <% } %>
 
-  serialize(): RequireAtLeastOne<SerializedClass<typeof <%- module.name -%>>> {
+  serialize(): AtLeastOneOf<SerializedClass<typeof <%- module.name -%>>> {
     return {
       arguments: [<%- moduleArguments -%>] as unknown as ConstructorParameters<typeof <%- module.name -%>>,
       members: {<%- moduleMembers -%>}
@@ -54,4 +51,8 @@ export class <%- module.name -%> <% if (module.isSerializable) { %> extends Seri
     return instance;
   }
 }
+
+<% if (module.isSerializable) { %>
+registerClass(<%- module.name -%>);
+<% } %>
 `.trim();

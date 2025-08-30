@@ -1,6 +1,6 @@
 {
   "name": "@tinyrpc/small-compiler",
-  "version": "0.1.4",
+  "version": "0.2.4",
   "exports": "./mod.ts",
   "tasks": {
     "dev": "deno run --watch main.ts"
